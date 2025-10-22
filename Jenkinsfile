@@ -52,7 +52,7 @@ pipeline {
     string(name: 'DB_MAINTENANCE_WINDOW_HOUR', defaultValue: '', description: 'Hora mantención')
     choice(name: 'DB_MONITORING_ENABLED',   choices: ['true', 'false'], description: 'Monitoring')
     choice(name: 'DB_AUDIT_LOGS_ENABLED',   choices: ['true', 'false'], description: 'Audit logs')
-    choice(name: 'CREDENTIAL_FILE',         choices: ['gcp-sa-platform', 'sa-transacciones'], description: 'Ruta credenciales (JSON)')
+    choice(name: 'CREDENTIAL_FILE',         choices: ['sa-plataforma', 'sa-transacciones'], description: 'Ruta credenciales (JSON)')
     string(name: 'DB_IAM_ROLE',             defaultValue: '', description: 'IAM Role')
     choice(name: 'DB_DELETION_PROTECTION',  choices: ['true', 'false'], description: 'Protección borrado')
     choice(name: 'CHECK_DELETE',            choices: ['true', 'false'], description: 'Check delete')
@@ -106,7 +106,7 @@ pipeline {
   }
 
   stages {
-    
+
     stage('Terraform Plan') {
       when { expression { params.ACTION == 'plan' || params.ACTION == 'apply' } }
       steps {
@@ -115,10 +115,10 @@ pipeline {
             sh "export GOOGLE_APPLICATION_CREDENTIALS='${GCP_CREDENTIALS}'"
 
             dir('terraform') { 
-              echo "Inicializando Terraform..."
+              echo "✅ Inicializando Terraform..."
               sh 'terraform init'
 
-              echo "Creando plan de ejecución con las variables de Jenkins..."
+              echo "📝 Creando plan de ejecución con las variables de Jenkins..."
               def tfVars = getTerraformVars()
               
               // Ejecutar Terraform Plan y guardarlo en un archivo para la etapa 'apply'
@@ -132,8 +132,6 @@ pipeline {
       }
     }
     
-    ---
-    
     stage('Terraform Apply') {
       when { expression { params.ACTION == 'apply' } }
       steps {
@@ -142,21 +140,15 @@ pipeline {
             sh "export GOOGLE_APPLICATION_CREDENTIALS='${GCP_CREDENTIALS}'"
 
             dir('terraform') { 
-              echo "Descargando el plan guardado..."
-              // Descargar el tfplan generado en la etapa anterior
-              // Nota: Esto requiere que el pipeline se ejecute en el mismo workspace o use un almacenamiento de estado remoto.
-              // Asumimos que el artifact está disponible.
+              echo "⬇️ Descargando/Verificando el plan guardado..."
               
-              // Descargar artefacto si se ejecuta en un nuevo executor
-              // steps { copyArtifacts(projectName: env.JOB_NAME, selector: lastSuccessful(), artifacts: 'terraform/tfplan') } 
-              
-              // Si se ejecuta en el mismo executor:
-              sh 'if [ -f tfplan ]; then echo "Usando tfplan local."; else echo "Error: tfplan no encontrado. Asegúrese de ejecutar 'plan' primero."; exit 1; fi'
+              // Verifica que el plan exista antes de aplicar
+              sh 'if [ ! -f tfplan ]; then echo "Error: tfplan no encontrado. Asegúrese de que la etapa Plan se haya ejecutado exitosamente justo antes de esta."; exit 1; fi'
 
-              echo "Aplicando cambios de infraestructura desde el plan..."
+              echo "🚀 Aplicando cambios de infraestructura desde el plan..."
               sh 'terraform apply -auto-approve tfplan' 
               
-              echo "Guardando salidas de Terraform."
+              echo "📦 Guardando salidas de Terraform."
               sh 'terraform output -json > output.json'
             }
           }
@@ -164,27 +156,25 @@ pipeline {
       }
     }
     
-    ---
-    
     stage('Terraform Destroy') {
       when { expression { params.ACTION == 'destroy' } }
       steps {
         script {
-          // Se añade una verificación para evitar borrados accidentales
+          // Seguridad: Evitar borrados accidentales en Producción
           if (params.ENVIRONMENT == '3-Produccion' && params.CHECK_DELETE != 'true') {
-            error("Operación DESTROY en PRODUCCIÓN no permitida. Ajuste el parámetro CHECK_DELETE a 'true' para confirmar.")
+            error("❌ Operación DESTROY en PRODUCCIÓN no permitida. Ajuste el parámetro CHECK_DELETE a 'true' para confirmar.")
           }
           
           withCredentials([file(credentialsId: 'gcp-sa-platform', variable: 'GCP_CREDENTIALS')]) {
             sh "export GOOGLE_APPLICATION_CREDENTIALS='${GCP_CREDENTIALS}'"
 
             dir('terraform') { 
-              echo "Inicializando Terraform para destruir la infraestructura..."
+              echo "💀 Inicializando Terraform para destruir la infraestructura..."
               sh 'terraform init'
               
-              echo "Ejecutando DESTROY. Esto eliminará todos los recursos gestionados por este estado de Terraform."
-              // El comando destroy debe usar -auto-approve para ser no interactivo
+              echo "⚠️ Ejecutando DESTROY. Esto eliminará todos los recursos gestionados."
               def tfVars = getTerraformVars()
+              // Nota: Usamos -var porque el destroy no necesita un plan pregenerado, solo el estado y las variables.
               sh "terraform destroy ${tfVars} -auto-approve" 
             }
           }
@@ -198,4 +188,3 @@ pipeline {
     failure { echo 'Error al ejecutar el pipeline.' }
   }
 }
-
