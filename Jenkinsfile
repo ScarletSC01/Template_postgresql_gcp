@@ -28,9 +28,9 @@ pipeline {
     // TYPE / INSTANCIA
     string(name: 'DB_INSTANCE_NAME', defaultValue: '', description: 'Nombre instancia')
     string(name: 'DB_INSTANCE_ID',   defaultValue: '', description: 'ID instancia')
-    choice(name: 'DB_AVAILABILITY_TYPE', choices: ['regional', 'single zone'], description: 'Disponibilidad')
+    choice(name: 'DB_AVAILABILITY_TYPE', choices: ['single zone', 'regional'], description: 'Disponibilidad')
     choice(name: 'DB_VERSION',           choices: ['POSTGRES_15', 'POSTGRES_14'], description: 'Versión PostgreSQL')
-    choice(name: 'MACHINE_TYPE',         choices: ['db-custom-4-16384', 'standard'], description: 'Máquina')
+    choice(name: 'MACHINE_TYPE',         choices: ['db-f1-micro','db-custom-4-16384', 'standard'], description: 'Máquina')
     string(name: 'DB_MAX_CONNECTIONS',   defaultValue: '', description: 'Máx conexiones')
     string(name: 'DB_STORAGE_SIZE',      defaultValue: '', description: 'Almacenamiento (GB)')
     choice(name: 'DB_STORAGE_AUTO_RESIZE', choices: ['false', 'true'], description: 'Auto-resize')
@@ -52,7 +52,7 @@ pipeline {
     string(name: 'DB_MAINTENANCE_WINDOW_HOUR', defaultValue: '', description: 'Hora mantención')
     choice(name: 'DB_MONITORING_ENABLED',   choices: ['true', 'false'], description: 'Monitoring')
     choice(name: 'DB_AUDIT_LOGS_ENABLED',   choices: ['true', 'false'], description: 'Audit logs')
-    choice(name: 'CREDENTIAL_FILE',         choices: ['sa-plataforma', 'sa-transacciones'], description: 'Ruta credenciales (JSON)')
+    choice(name: 'CREDENTIAL_FILE',         choices: ['gcp-sa-platform','sa-plataforma', 'sa-transacciones'], description: 'Ruta credenciales (JSON)')
     string(name: 'DB_IAM_ROLE',             defaultValue: '', description: 'IAM Role')
     choice(name: 'DB_DELETION_PROTECTION',  choices: ['true', 'false'], description: 'Protección borrado')
     choice(name: 'CHECK_DELETE',            choices: ['true', 'false'], description: 'Check delete')
@@ -218,3 +218,4 @@ pipeline {
     failure { echo 'Error al ejecutar el pipeline.' }
   }
 }
+
