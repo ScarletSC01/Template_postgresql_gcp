@@ -28,9 +28,9 @@ pipeline {
     // TYPE / INSTANCIA
     string(name: 'DB_INSTANCE_NAME', defaultValue: '', description: 'Nombre instancia')
     string(name: 'DB_INSTANCE_ID',   defaultValue: '', description: 'ID instancia')
-    choice(name: 'DB_AVAILABILITY_TYPE', choices: ['single zone', 'regional'], description: 'Disponibilidad')
+    choice(name: 'DB_AVAILABILITY_TYPE', choices: ['regional', 'single zone'], description: 'Disponibilidad')
     choice(name: 'DB_VERSION',           choices: ['POSTGRES_15', 'POSTGRES_14'], description: 'Versión PostgreSQL')
-    choice(name: 'MACHINE_TYPE',         choices: ['db-f1-micro','db-custom-4-16384', 'standard'], description: 'Máquina')
+    choice(name: 'MACHINE_TYPE',         choices: ['db-custom-4-16384', 'standard'], description: 'Máquina')
     string(name: 'DB_MAX_CONNECTIONS',   defaultValue: '', description: 'Máx conexiones')
     string(name: 'DB_STORAGE_SIZE',      defaultValue: '', description: 'Almacenamiento (GB)')
     choice(name: 'DB_STORAGE_AUTO_RESIZE', choices: ['false', 'true'], description: 'Auto-resize')
@@ -52,7 +52,7 @@ pipeline {
     string(name: 'DB_MAINTENANCE_WINDOW_HOUR', defaultValue: '', description: 'Hora mantención')
     choice(name: 'DB_MONITORING_ENABLED',   choices: ['true', 'false'], description: 'Monitoring')
     choice(name: 'DB_AUDIT_LOGS_ENABLED',   choices: ['true', 'false'], description: 'Audit logs')
-    choice(name: 'CREDENTIAL_FILE',         choices: ['gcp-sa-platform','sa-plataforma', 'sa-transacciones'], description: 'Ruta credenciales (JSON)')
+    choice(name: 'CREDENTIAL_FILE',         choices: ['sa-plataforma', 'sa-transacciones'], description: 'Ruta credenciales (JSON)')
     string(name: 'DB_IAM_ROLE',             defaultValue: '', description: 'IAM Role')
     choice(name: 'DB_DELETION_PROTECTION',  choices: ['true', 'false'], description: 'Protección borrado')
     choice(name: 'CHECK_DELETE',            choices: ['true', 'false'], description: 'Check delete')
@@ -85,7 +85,8 @@ pipeline {
               "DB_DELETION_PROTECTION": params.DB_DELETION_PROTECTION, "DB_ENCRYPTION_ENABLED": params.DB_ENCRYPTION_ENABLED,
               "ENABLE_CACHE": params.ENABLE_CACHE, "CHECK_DELETE": params.CHECK_DELETE, "CREDENTIAL_FILE": params.CREDENTIAL_FILE,
               "DB_IAM_ROLE": params.DB_IAM_ROLE, "DB_FAILOVER_REPLICA_ENABLED": params.DB_FAILOVER_REPLICA_ENABLED,
-              "DB_READ_REPLICA_ENABLED": params.DB_READ_REPLICA_ENABLED
+              "DB_READ_REPLICA_ENABLED": params.DB_READ_REPLICA_ENABLED,
+              "ACTION": params.ACTION // Incluir la variable ACTION
             ]
             // Convierte el mapa de variables en una cadena de argumentos -var="..."
             def varString = vars.collect { k, v -> "-var=\"${k}=${v}\"" }.join(' ')
@@ -95,7 +96,7 @@ pipeline {
           withCredentials([file(credentialsId: 'gcp-sa-platform', variable: 'GCP_CREDENTIALS')]) {
             sh "export GOOGLE_APPLICATION_CREDENTIALS='${GCP_CREDENTIALS}'"
 
-            // SOLUCIÓN AL ERROR: Copiar archivos .tf al subdirectorio 'terraform'
+            // Crear el directorio de ejecución y copiar archivos .tf desde la raíz
             sh '''
               mkdir -p terraform
               cp *.tf terraform/
@@ -124,37 +125,19 @@ pipeline {
       when { expression { params.ACTION == 'apply' } }
       steps {
         script {
-          // Helper para generar todos los -var=... (Redefinición local)
-          def getTerraformVars = {
-            def vars = [
-              "PROJECT_ID": params.PROJECT_ID, "REGION": params.REGION, "ZONE": params.ZONE, "ENVIRONMENT": params.ENVIRONMENT,
-              "DB_INSTANCE_NAME": params.DB_INSTANCE_NAME, "DB_AVAILABILITY_TYPE": params.DB_AVAILABILITY_TYPE, "DB_VERSION": params.DB_VERSION,
-              "MACHINE_TYPE": params.MACHINE_TYPE, "DB_MAX_CONNECTIONS": params.DB_MAX_CONNECTIONS, "DB_STORAGE_SIZE": params.DB_STORAGE_SIZE,
-              "DB_STORAGE_AUTO_RESIZE": params.DB_STORAGE_AUTO_RESIZE, "DB_STORAGE_TYPE": params.DB_STORAGE_TYPE, "DB_USERNAME": params.DB_USERNAME,
-              "DB_PASSWORD": params.DB_PASSWORD, "DB_VPC_NETWORK": params.DB_VPC_NETWORK, "DB_PRIVATE_IP_ENABLED": params.DB_PRIVATE_IP_ENABLED,
-              "DB_PUBLIC_ACCESS_ENABLED": params.DB_PUBLIC_ACCESS_ENABLED, "DB_IP_RANGE_ALLOWED": params.DB_IP_RANGE_ALLOWED,
-              "DB_BACKUP_START_TIME": params.DB_BACKUP_START_TIME, "DB_BACKUP_RETENTION_DAYS": params.DB_BACKUP_RETENTION_DAYS,
-              "DB_MAINTENANCE_WINDOW_DAY": params.DB_MAINTENANCE_WINDOW_DAY, "DB_MAINTENANCE_WINDOW_HOUR": params.DB_MAINTENANCE_WINDOW_HOUR,
-              "DB_MONITORING_ENABLED": params.DB_MONITORING_ENABLED, "DB_AUDIT_LOGS_ENABLED": params.DB_AUDIT_LOGS_ENABLED,
-              "DB_DELETION_PROTECTION": params.DB_DELETION_PROTECTION, "DB_ENCRYPTION_ENABLED": params.DB_ENCRYPTION_ENABLED,
-              "ENABLE_CACHE": params.ENABLE_CACHE, "CHECK_DELETE": params.CHECK_DELETE, "CREDENTIAL_FILE": params.CREDENTIAL_FILE,
-              "DB_IAM_ROLE": params.DB_IAM_ROLE, "DB_FAILOVER_REPLICA_ENABLED": params.DB_FAILOVER_REPLICA_ENABLED,
-              "DB_READ_REPLICA_ENABLED": params.DB_READ_REPLICA_ENABLED
-            ]
-            def varString = vars.collect { k, v -> "-var=\"${k}=${v}\"" }.join(' ')
-            return varString
-          }
-
+          // Ya no necesitamos la definición de getTerraformVars() aquí, solo usamos el plan inmutable.
+          
           withCredentials([file(credentialsId: 'gcp-sa-platform', variable: 'GCP_CREDENTIALS')]) {
             sh "export GOOGLE_APPLICATION_CREDENTIALS='${GCP_CREDENTIALS}'"
 
             dir('terraform') { 
-              echo "Descargando/Verificando el plan guardado..."
+              echo "Verificando el plan guardado..."
               
-              // Verifica que el plan exista antes de aplicar
+              // Verifica que el plan exista.
               sh 'if [ ! -f tfplan ]; then echo "Error: tfplan no encontrado. Asegúrese de que la etapa Plan se haya ejecutado exitosamente justo antes de esta."; exit 1; fi'
 
-              echo "Aplicando cambios de infraestructura desde el plan..."
+              echo "Aplicando cambios de infraestructura desde el plan 'tfplan'..."
+              // Aplicación inmutable: usa SOLO el archivo de plan.
               sh 'terraform apply -auto-approve tfplan' 
               
               echo "Guardando salidas de Terraform."
@@ -184,7 +167,8 @@ pipeline {
               "DB_DELETION_PROTECTION": params.DB_DELETION_PROTECTION, "DB_ENCRYPTION_ENABLED": params.DB_ENCRYPTION_ENABLED,
               "ENABLE_CACHE": params.ENABLE_CACHE, "CHECK_DELETE": params.CHECK_DELETE, "CREDENTIAL_FILE": params.CREDENTIAL_FILE,
               "DB_IAM_ROLE": params.DB_IAM_ROLE, "DB_FAILOVER_REPLICA_ENABLED": params.DB_FAILOVER_REPLICA_ENABLED,
-              "DB_READ_REPLICA_ENABLED": params.DB_READ_REPLICA_ENABLED
+              "DB_READ_REPLICA_ENABLED": params.DB_READ_REPLICA_ENABLED,
+              "ACTION": params.ACTION
             ]
             def varString = vars.collect { k, v -> "-var=\"${k}=${v}\"" }.join(' ')
             return varString
@@ -200,10 +184,10 @@ pipeline {
 
             dir('terraform') { 
               echo "Inicializando Terraform para destruir la infraestructura..."
-              // La inicialización es necesaria para cargar el estado y el backend
               sh 'terraform init' 
               
               echo "Ejecutando DESTROY. Esto eliminará todos los recursos gestionados."
+              // Destroy REQUIERE variables para inicializar el estado
               def tfVars = getTerraformVars()
               sh "terraform destroy ${tfVars} -auto-approve" 
             }
@@ -218,4 +202,3 @@ pipeline {
     failure { echo 'Error al ejecutar el pipeline.' }
   }
 }
-
