@@ -8,6 +8,11 @@ output "instance_master_private_ip" {
   value       = google_sql_database_instance.master.private_ip_address
 }
 
+output "instance_master_public_ip" {
+  description = "IP pública de la instancia maestra"
+  value       = google_sql_database_instance.master.public_ip_address
+}
+
 output "instance_read_replica_connection_name" {
   description = "Nombre de conexión de la réplica de lectura (si existe)"
   value       = var.DB_READ_REPLICA_ENABLED == "true" ? google_sql_database_instance.read_replica[0].connection_name : "N/A"
