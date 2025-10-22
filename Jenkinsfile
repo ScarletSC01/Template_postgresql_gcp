@@ -95,12 +95,19 @@ pipeline {
           withCredentials([file(credentialsId: 'gcp-sa-platform', variable: 'GCP_CREDENTIALS')]) {
             sh "export GOOGLE_APPLICATION_CREDENTIALS='${GCP_CREDENTIALS}'"
 
+            // SOLUCIÓN AL ERROR: Copiar archivos .tf al subdirectorio 'terraform'
+            sh '''
+              mkdir -p terraform
+              cp *.tf terraform/
+              echo "Archivos de Terraform copiados a ./terraform/"
+            '''
+            
             dir('terraform') { 
               echo "Inicializando Terraform..."
               sh 'terraform init'
 
               echo "Creando plan de ejecución con las variables de Jenkins..."
-              def tfVars = getTerraformVars() // Llama al closure
+              def tfVars = getTerraformVars()
               
               // Ejecutar Terraform Plan y guardarlo en un archivo para la etapa 'apply'
               sh "terraform plan ${tfVars} -out=tfplan"
@@ -193,7 +200,8 @@ pipeline {
 
             dir('terraform') { 
               echo "Inicializando Terraform para destruir la infraestructura..."
-              sh 'terraform init'
+              // La inicialización es necesaria para cargar el estado y el backend
+              sh 'terraform init' 
               
               echo "Ejecutando DESTROY. Esto eliminará todos los recursos gestionados."
               def tfVars = getTerraformVars()
