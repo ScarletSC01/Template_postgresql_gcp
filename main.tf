@@ -22,31 +22,35 @@ resource "google_sql_database_instance" "master" {
   name                = var.DB_INSTANCE_NAME
   deletion_protection = var.DB_DELETION_PROTECTION == "true"
   
-  // CORRECCIÓN 1: 'zone' debe ser un argumento de nivel de recurso
-  zone                = var.DB_AVAILABILITY_TYPE == "single zone" && var.ZONE != "" ? var.ZONE : null 
+  # ELIMINAMOS 'zone' de aquí. La ubicación se define en settings.location_preference.
+  # zone                = var.DB_AVAILABILITY_TYPE == "single zone" && var.ZONE != "" ? var.ZONE : null 
   
   settings {
-    // Argumentos nivel settings {}
     tier                   = var.MACHINE_TYPE
     disk_size              = try(tonumber(var.DB_STORAGE_SIZE), 10)
     disk_type              = var.DB_STORAGE_TYPE
     disk_autoresize        = var.DB_STORAGE_AUTO_RESIZE == "true"
     activation_policy      = "ALWAYS"
+    
+    // Si es 'single zone' se establece a ZONAL. Si es 'regional', a REGIONAL.
     availability_type      = var.DB_AVAILABILITY_TYPE == "regional" ? "REGIONAL" : "ZONAL"
     
-    // CORRECCIÓN 2: Eliminamos data_cache_enabled, no soportado en db-f1-micro
-    # data_cache_enabled     = var.ENABLE_CACHE == "true"
+    // Usamos location_preference para especificar la zona SÓLO si es ZONAL y se pasó una zona.
+    dynamic "location_preference" {
+      for_each = var.DB_AVAILABILITY_TYPE == "single zone" && var.ZONE != "" ? [1] : []
+      content {
+        zone = var.ZONE
+      }
+    }
 
     // Configuración de Backup
     backup_configuration {
       enabled              = true 
       start_time           = var.DB_BACKUP_START_TIME
       location             = var.REGION
-      // Usamos 'transaction_log_retention_days' en lugar de 'retained_backups' para la retención basada en tiempo.
+      // Usamos 'transaction_log_retention_days'
       transaction_log_retention_days = try(var.DB_BACKUP_RETENTION_DAYS, "7")
       point_in_time_recovery_enabled = true
-      
-      # retained_backups eliminado para evitar conflicto de versiones
     }
 
     // Mantenimiento
@@ -72,7 +76,7 @@ resource "google_sql_database_instance" "master" {
       }
     }
     
-    // Flags: max_connections y pgaudit
+    // Flags
     database_flags {
       name  = "max_connections"
       value = try(var.DB_MAX_CONNECTIONS, "100")
@@ -105,7 +109,7 @@ resource "google_sql_database_instance" "read_replica" {
   region              = var.REGION
   name                = "${var.DB_INSTANCE_NAME}-read-replica"
   master_instance_name = google_sql_database_instance.master.name
-
+  
   settings {
     tier                   = var.MACHINE_TYPE
     disk_size              = try(tonumber(var.DB_STORAGE_SIZE), 10)
