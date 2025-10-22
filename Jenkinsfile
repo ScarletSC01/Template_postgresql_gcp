@@ -52,7 +52,7 @@ pipeline {
     string(name: 'DB_MAINTENANCE_WINDOW_HOUR', defaultValue: '', description: 'Hora mantención')
     choice(name: 'DB_MONITORING_ENABLED',   choices: ['true', 'false'], description: 'Monitoring')
     choice(name: 'DB_AUDIT_LOGS_ENABLED',   choices: ['true', 'false'], description: 'Audit logs')
-    choice(name: 'CREDENTIAL_FILE',         choices: ['sa-plataforma', 'sa-transacciones'], description: 'Ruta credenciales (JSON)')
+    choice(name: 'CREDENTIAL_FILE',         choices: ['gcp-sa-platform', 'sa-transacciones'], description: 'Ruta credenciales (JSON)')
     string(name: 'DB_IAM_ROLE',             defaultValue: '', description: 'IAM Role')
     choice(name: 'DB_DELETION_PROTECTION',  choices: ['true', 'false'], description: 'Protección borrado')
     choice(name: 'CHECK_DELETE',            choices: ['true', 'false'], description: 'Check delete')
@@ -198,3 +198,4 @@ pipeline {
     failure { echo 'Error al ejecutar el pipeline.' }
   }
 }
+
