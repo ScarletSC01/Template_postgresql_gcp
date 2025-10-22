@@ -15,16 +15,17 @@ provider "google" {
 
 // 1. Instancia Principal de Cloud SQL
 resource "google_sql_database_instance" "master" {
+  // Las únicas variables que no deben estar vacías son las obligatorias para el proveedor (PROJECT_ID)
   project             = var.PROJECT_ID
   database_version    = var.DB_VERSION
   region              = var.REGION
   name                = var.DB_INSTANCE_NAME
   
-  // Mapeo directo: 'true' -> true, 'false' -> false
+  // Conversión de string 'true'/'false' a booleano
   deletion_protection = var.DB_DELETION_PROTECTION == "true"
 
-  // La zona se establece solo si la disponibilidad es 'single zone'
-  zone                = var.DB_AVAILABILITY_TYPE == "single zone" ? var.ZONE : null
+  // La zona se establece solo si la disponibilidad es 'single zone' Y el usuario proporcionó una ZONA
+  zone                = var.DB_AVAILABILITY_TYPE == "single zone" && var.ZONE != "" ? var.ZONE : null
 
   settings {
     tier                   = var.MACHINE_TYPE
@@ -32,16 +33,14 @@ resource "google_sql_database_instance" "master" {
     disk_type              = var.DB_STORAGE_TYPE
     disk_autoresize        = var.DB_STORAGE_AUTO_RESIZE == "true"
     activation_policy      = "ALWAYS"
-    // 'regional' habilita alta disponibilidad (failover)
     availability_type      = var.DB_AVAILABILITY_TYPE == "regional" ? "REGIONAL" : "ZONAL"
     max_connections        = try(tonumber(var.DB_MAX_CONNECTIONS), 100)
     
-    // Mapeo de ENABLE_CACHE
     data_cache_enabled     = var.ENABLE_CACHE == "true"
 
     // Configuración de Backup
     backup_configuration {
-      enabled              = true // Asumido por DB_BACKUP_ENABLED='true'
+      enabled              = true 
       start_time           = var.DB_BACKUP_START_TIME
       location             = var.REGION
       retained_backups     = try(tonumber(var.DB_BACKUP_RETENTION_DAYS), 7)
@@ -58,13 +57,13 @@ resource "google_sql_database_instance" "master" {
     ip_configuration {
       ipv4_enabled    = var.DB_PUBLIC_ACCESS_ENABLED == "true"
       
-      // La red privada requiere que DB_PRIVATE_IP_ENABLED sea true
-      private_network = var.DB_PRIVATE_IP_ENABLED == "true" ? var.DB_VPC_NETWORK : null
+      // La red privada solo se configura si DB_PRIVATE_IP_ENABLED es true Y DB_VPC_NETWORK no está vacío
+      private_network = var.DB_PRIVATE_IP_ENABLED == "true" && var.DB_VPC_NETWORK != "" ? var.DB_VPC_NETWORK : null
       
-      // Rangos de IP autorizados para acceso público
+      // Rangos de IP autorizados (solo si el acceso público está habilitado)
       dynamic "authorized_networks" {
         for_each = var.DB_PUBLIC_ACCESS_ENABLED == "true" && var.DB_IP_RANGE_ALLOWED == "true" ? [
-          { value = "0.0.0.0/0", name = "all-ipv4" } // Rango por defecto, se puede expandir si es necesario.
+          { value = "0.0.0.0/0", name = "default" }
         ] : []
         content {
           value = authorized_networks.value.value
@@ -73,10 +72,13 @@ resource "google_sql_database_instance" "master" {
       }
     }
     
-    // Configuración de Flags
-    database_flags {
+    // Configuración de Flags (solo si se necesita)
+    dynamic "database_flags" {
+      for_each = var.DB_AUDIT_LOGS_ENABLED == "true" ? ["pgaudit"] : []
+      content {
         name  = "cloudsql.enable_pgaudit"
-        value = var.DB_AUDIT_LOGS_ENABLED == "true" ? "on" : "off"
+        value = "on"
+      }
     }
   }
 }
@@ -87,7 +89,7 @@ resource "google_sql_user" "app_user" {
   instance = google_sql_database_instance.master.name
   name     = var.DB_USERNAME
   
-  // La contraseña se establece solo si la autenticación IAM no está habilitada
+  // Se usa la autenticación de usuario/contraseña si DB_IAM_ROLE está vacío
   password = var.DB_IAM_ROLE == "" ? var.DB_PASSWORD : null 
 }
 
@@ -112,7 +114,7 @@ resource "google_sql_database_instance" "read_replica" {
     
     ip_configuration {
       ipv4_enabled    = var.DB_PUBLIC_ACCESS_ENABLED == "true"
-      private_network = var.DB_PRIVATE_IP_ENABLED == "true" ? var.DB_VPC_NETWORK : null
+      private_network = var.DB_PRIVATE_IP_ENABLED == "true" && var.DB_VPC_NETWORK != "" ? var.DB_VPC_NETWORK : null
     }
   }
 }
