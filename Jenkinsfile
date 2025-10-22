@@ -64,62 +64,43 @@ pipeline {
     choice(name: 'DB_READ_REPLICA_ENABLED',     choices: ['false', 'true'], description: 'Read replica')
   }
 
-  // Helper para generar todos los -var=...
-  def getTerraformVars() {
-    def vars = [
-      "PROJECT_ID": params.PROJECT_ID,
-      "REGION": params.REGION,
-      "ZONE": params.ZONE,
-      "ENVIRONMENT": params.ENVIRONMENT,
-      "DB_INSTANCE_NAME": params.DB_INSTANCE_NAME,
-      "DB_AVAILABILITY_TYPE": params.DB_AVAILABILITY_TYPE,
-      "DB_VERSION": params.DB_VERSION,
-      "MACHINE_TYPE": params.MACHINE_TYPE,
-      "DB_MAX_CONNECTIONS": params.DB_MAX_CONNECTIONS,
-      "DB_STORAGE_SIZE": params.DB_STORAGE_SIZE,
-      "DB_STORAGE_AUTO_RESIZE": params.DB_STORAGE_AUTO_RESIZE,
-      "DB_STORAGE_TYPE": params.DB_STORAGE_TYPE,
-      "DB_USERNAME": params.DB_USERNAME,
-      "DB_PASSWORD": params.DB_PASSWORD,
-      "DB_VPC_NETWORK": params.DB_VPC_NETWORK,
-      "DB_PRIVATE_IP_ENABLED": params.DB_PRIVATE_IP_ENABLED,
-      "DB_PUBLIC_ACCESS_ENABLED": params.DB_PUBLIC_ACCESS_ENABLED,
-      "DB_IP_RANGE_ALLOWED": params.DB_IP_RANGE_ALLOWED,
-      "DB_BACKUP_START_TIME": params.DB_BACKUP_START_TIME,
-      "DB_BACKUP_RETENTION_DAYS": params.DB_BACKUP_RETENTION_DAYS,
-      "DB_MAINTENANCE_WINDOW_DAY": params.DB_MAINTENANCE_WINDOW_DAY,
-      "DB_MAINTENANCE_WINDOW_HOUR": params.DB_MAINTENANCE_WINDOW_HOUR,
-      "DB_MONITORING_ENABLED": params.DB_MONITORING_ENABLED,
-      "DB_AUDIT_LOGS_ENABLED": params.DB_AUDIT_LOGS_ENABLED,
-      "DB_DELETION_PROTECTION": params.DB_DELETION_PROTECTION,
-      "DB_ENCRYPTION_ENABLED": params.DB_ENCRYPTION_ENABLED,
-      "ENABLE_CACHE": params.ENABLE_CACHE,
-      "CHECK_DELETE": params.CHECK_DELETE,
-      "CREDENTIAL_FILE": params.CREDENTIAL_FILE,
-      "DB_IAM_ROLE": params.DB_IAM_ROLE,
-      "DB_FAILOVER_REPLICA_ENABLED": params.DB_FAILOVER_REPLICA_ENABLED,
-      "DB_READ_REPLICA_ENABLED": params.DB_READ_REPLICA_ENABLED
-    ]
-
-    def varString = vars.collect { k, v -> "-var=\"${k}=${v}\"" }.join(' ')
-    return varString
-  }
-
   stages {
 
     stage('Terraform Plan') {
       when { expression { params.ACTION == 'plan' || params.ACTION == 'apply' } }
       steps {
         script {
+          // Helper para generar todos los -var=... (Definición local)
+          def getTerraformVars = {
+            def vars = [
+              "PROJECT_ID": params.PROJECT_ID, "REGION": params.REGION, "ZONE": params.ZONE, "ENVIRONMENT": params.ENVIRONMENT,
+              "DB_INSTANCE_NAME": params.DB_INSTANCE_NAME, "DB_AVAILABILITY_TYPE": params.DB_AVAILABILITY_TYPE, "DB_VERSION": params.DB_VERSION,
+              "MACHINE_TYPE": params.MACHINE_TYPE, "DB_MAX_CONNECTIONS": params.DB_MAX_CONNECTIONS, "DB_STORAGE_SIZE": params.DB_STORAGE_SIZE,
+              "DB_STORAGE_AUTO_RESIZE": params.DB_STORAGE_AUTO_RESIZE, "DB_STORAGE_TYPE": params.DB_STORAGE_TYPE, "DB_USERNAME": params.DB_USERNAME,
+              "DB_PASSWORD": params.DB_PASSWORD, "DB_VPC_NETWORK": params.DB_VPC_NETWORK, "DB_PRIVATE_IP_ENABLED": params.DB_PRIVATE_IP_ENABLED,
+              "DB_PUBLIC_ACCESS_ENABLED": params.DB_PUBLIC_ACCESS_ENABLED, "DB_IP_RANGE_ALLOWED": params.DB_IP_RANGE_ALLOWED,
+              "DB_BACKUP_START_TIME": params.DB_BACKUP_START_TIME, "DB_BACKUP_RETENTION_DAYS": params.DB_BACKUP_RETENTION_DAYS,
+              "DB_MAINTENANCE_WINDOW_DAY": params.DB_MAINTENANCE_WINDOW_DAY, "DB_MAINTENANCE_WINDOW_HOUR": params.DB_MAINTENANCE_WINDOW_HOUR,
+              "DB_MONITORING_ENABLED": params.DB_MONITORING_ENABLED, "DB_AUDIT_LOGS_ENABLED": params.DB_AUDIT_LOGS_ENABLED,
+              "DB_DELETION_PROTECTION": params.DB_DELETION_PROTECTION, "DB_ENCRYPTION_ENABLED": params.DB_ENCRYPTION_ENABLED,
+              "ENABLE_CACHE": params.ENABLE_CACHE, "CHECK_DELETE": params.CHECK_DELETE, "CREDENTIAL_FILE": params.CREDENTIAL_FILE,
+              "DB_IAM_ROLE": params.DB_IAM_ROLE, "DB_FAILOVER_REPLICA_ENABLED": params.DB_FAILOVER_REPLICA_ENABLED,
+              "DB_READ_REPLICA_ENABLED": params.DB_READ_REPLICA_ENABLED
+            ]
+            // Convierte el mapa de variables en una cadena de argumentos -var="..."
+            def varString = vars.collect { k, v -> "-var=\"${k}=${v}\"" }.join(' ')
+            return varString
+          }
+
           withCredentials([file(credentialsId: 'gcp-sa-platform', variable: 'GCP_CREDENTIALS')]) {
             sh "export GOOGLE_APPLICATION_CREDENTIALS='${GCP_CREDENTIALS}'"
 
             dir('terraform') { 
-              echo "✅ Inicializando Terraform..."
+              echo "Inicializando Terraform..."
               sh 'terraform init'
 
-              echo "📝 Creando plan de ejecución con las variables de Jenkins..."
-              def tfVars = getTerraformVars()
+              echo "Creando plan de ejecución con las variables de Jenkins..."
+              def tfVars = getTerraformVars() // Llama al closure
               
               // Ejecutar Terraform Plan y guardarlo en un archivo para la etapa 'apply'
               sh "terraform plan ${tfVars} -out=tfplan"
@@ -136,19 +117,40 @@ pipeline {
       when { expression { params.ACTION == 'apply' } }
       steps {
         script {
+          // Helper para generar todos los -var=... (Redefinición local)
+          def getTerraformVars = {
+            def vars = [
+              "PROJECT_ID": params.PROJECT_ID, "REGION": params.REGION, "ZONE": params.ZONE, "ENVIRONMENT": params.ENVIRONMENT,
+              "DB_INSTANCE_NAME": params.DB_INSTANCE_NAME, "DB_AVAILABILITY_TYPE": params.DB_AVAILABILITY_TYPE, "DB_VERSION": params.DB_VERSION,
+              "MACHINE_TYPE": params.MACHINE_TYPE, "DB_MAX_CONNECTIONS": params.DB_MAX_CONNECTIONS, "DB_STORAGE_SIZE": params.DB_STORAGE_SIZE,
+              "DB_STORAGE_AUTO_RESIZE": params.DB_STORAGE_AUTO_RESIZE, "DB_STORAGE_TYPE": params.DB_STORAGE_TYPE, "DB_USERNAME": params.DB_USERNAME,
+              "DB_PASSWORD": params.DB_PASSWORD, "DB_VPC_NETWORK": params.DB_VPC_NETWORK, "DB_PRIVATE_IP_ENABLED": params.DB_PRIVATE_IP_ENABLED,
+              "DB_PUBLIC_ACCESS_ENABLED": params.DB_PUBLIC_ACCESS_ENABLED, "DB_IP_RANGE_ALLOWED": params.DB_IP_RANGE_ALLOWED,
+              "DB_BACKUP_START_TIME": params.DB_BACKUP_START_TIME, "DB_BACKUP_RETENTION_DAYS": params.DB_BACKUP_RETENTION_DAYS,
+              "DB_MAINTENANCE_WINDOW_DAY": params.DB_MAINTENANCE_WINDOW_DAY, "DB_MAINTENANCE_WINDOW_HOUR": params.DB_MAINTENANCE_WINDOW_HOUR,
+              "DB_MONITORING_ENABLED": params.DB_MONITORING_ENABLED, "DB_AUDIT_LOGS_ENABLED": params.DB_AUDIT_LOGS_ENABLED,
+              "DB_DELETION_PROTECTION": params.DB_DELETION_PROTECTION, "DB_ENCRYPTION_ENABLED": params.DB_ENCRYPTION_ENABLED,
+              "ENABLE_CACHE": params.ENABLE_CACHE, "CHECK_DELETE": params.CHECK_DELETE, "CREDENTIAL_FILE": params.CREDENTIAL_FILE,
+              "DB_IAM_ROLE": params.DB_IAM_ROLE, "DB_FAILOVER_REPLICA_ENABLED": params.DB_FAILOVER_REPLICA_ENABLED,
+              "DB_READ_REPLICA_ENABLED": params.DB_READ_REPLICA_ENABLED
+            ]
+            def varString = vars.collect { k, v -> "-var=\"${k}=${v}\"" }.join(' ')
+            return varString
+          }
+
           withCredentials([file(credentialsId: 'gcp-sa-platform', variable: 'GCP_CREDENTIALS')]) {
             sh "export GOOGLE_APPLICATION_CREDENTIALS='${GCP_CREDENTIALS}'"
 
             dir('terraform') { 
-              echo "⬇️ Descargando/Verificando el plan guardado..."
+              echo "Descargando/Verificando el plan guardado..."
               
               // Verifica que el plan exista antes de aplicar
               sh 'if [ ! -f tfplan ]; then echo "Error: tfplan no encontrado. Asegúrese de que la etapa Plan se haya ejecutado exitosamente justo antes de esta."; exit 1; fi'
 
-              echo "🚀 Aplicando cambios de infraestructura desde el plan..."
+              echo "Aplicando cambios de infraestructura desde el plan..."
               sh 'terraform apply -auto-approve tfplan' 
               
-              echo "📦 Guardando salidas de Terraform."
+              echo "Guardando salidas de Terraform."
               sh 'terraform output -json > output.json'
             }
           }
@@ -160,21 +162,41 @@ pipeline {
       when { expression { params.ACTION == 'destroy' } }
       steps {
         script {
+          // Helper para generar todos los -var=... (Redefinición local)
+          def getTerraformVars = {
+            def vars = [
+              "PROJECT_ID": params.PROJECT_ID, "REGION": params.REGION, "ZONE": params.ZONE, "ENVIRONMENT": params.ENVIRONMENT,
+              "DB_INSTANCE_NAME": params.DB_INSTANCE_NAME, "DB_AVAILABILITY_TYPE": params.DB_AVAILABILITY_TYPE, "DB_VERSION": params.DB_VERSION,
+              "MACHINE_TYPE": params.MACHINE_TYPE, "DB_MAX_CONNECTIONS": params.DB_MAX_CONNECTIONS, "DB_STORAGE_SIZE": params.DB_STORAGE_SIZE,
+              "DB_STORAGE_AUTO_RESIZE": params.DB_STORAGE_AUTO_RESIZE, "DB_STORAGE_TYPE": params.DB_STORAGE_TYPE, "DB_USERNAME": params.DB_USERNAME,
+              "DB_PASSWORD": params.DB_PASSWORD, "DB_VPC_NETWORK": params.DB_VPC_NETWORK, "DB_PRIVATE_IP_ENABLED": params.DB_PRIVATE_IP_ENABLED,
+              "DB_PUBLIC_ACCESS_ENABLED": params.DB_PUBLIC_ACCESS_ENABLED, "DB_IP_RANGE_ALLOWED": params.DB_IP_RANGE_ALLOWED,
+              "DB_BACKUP_START_TIME": params.DB_BACKUP_START_TIME, "DB_BACKUP_RETENTION_DAYS": params.DB_BACKUP_RETENTION_DAYS,
+              "DB_MAINTENANCE_WINDOW_DAY": params.DB_MAINTENANCE_WINDOW_DAY, "DB_MAINTENANCE_WINDOW_HOUR": params.DB_MAINTENANCE_WINDOW_HOUR,
+              "DB_MONITORING_ENABLED": params.DB_MONITORING_ENABLED, "DB_AUDIT_LOGS_ENABLED": params.DB_AUDIT_LOGS_ENABLED,
+              "DB_DELETION_PROTECTION": params.DB_DELETION_PROTECTION, "DB_ENCRYPTION_ENABLED": params.DB_ENCRYPTION_ENABLED,
+              "ENABLE_CACHE": params.ENABLE_CACHE, "CHECK_DELETE": params.CHECK_DELETE, "CREDENTIAL_FILE": params.CREDENTIAL_FILE,
+              "DB_IAM_ROLE": params.DB_IAM_ROLE, "DB_FAILOVER_REPLICA_ENABLED": params.DB_FAILOVER_REPLICA_ENABLED,
+              "DB_READ_REPLICA_ENABLED": params.DB_READ_REPLICA_ENABLED
+            ]
+            def varString = vars.collect { k, v -> "-var=\"${k}=${v}\"" }.join(' ')
+            return varString
+          }
+          
           // Seguridad: Evitar borrados accidentales en Producción
           if (params.ENVIRONMENT == '3-Produccion' && params.CHECK_DELETE != 'true') {
-            error("❌ Operación DESTROY en PRODUCCIÓN no permitida. Ajuste el parámetro CHECK_DELETE a 'true' para confirmar.")
+            error("Operación DESTROY en PRODUCCIÓN no permitida. Ajuste el parámetro CHECK_DELETE a 'true' para confirmar.")
           }
           
           withCredentials([file(credentialsId: 'gcp-sa-platform', variable: 'GCP_CREDENTIALS')]) {
             sh "export GOOGLE_APPLICATION_CREDENTIALS='${GCP_CREDENTIALS}'"
 
             dir('terraform') { 
-              echo "💀 Inicializando Terraform para destruir la infraestructura..."
+              echo "Inicializando Terraform para destruir la infraestructura..."
               sh 'terraform init'
               
-              echo "⚠️ Ejecutando DESTROY. Esto eliminará todos los recursos gestionados."
+              echo "Ejecutando DESTROY. Esto eliminará todos los recursos gestionados."
               def tfVars = getTerraformVars()
-              // Nota: Usamos -var porque el destroy no necesita un plan pregenerado, solo el estado y las variables.
               sh "terraform destroy ${tfVars} -auto-approve" 
             }
           }
