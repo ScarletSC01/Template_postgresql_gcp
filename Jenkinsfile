@@ -16,6 +16,9 @@ pipeline {
   }
 
   parameters {
+    // CONTROL DE ACCIÓN
+    choice(name: 'ACTION', choices: ['plan', 'apply', 'destroy'], description: 'Acción de Terraform a ejecutar.')
+
     // GCP
     string(name: 'PROJECT_ID', defaultValue: '', description: 'ID del proyecto')
     string(name: 'REGION',     defaultValue: '', description: 'Región')
@@ -61,95 +64,130 @@ pipeline {
     choice(name: 'DB_READ_REPLICA_ENABLED',     choices: ['false', 'true'], description: 'Read replica')
   }
 
+  // Helper para generar todos los -var=...
+  def getTerraformVars() {
+    def vars = [
+      "PROJECT_ID": params.PROJECT_ID,
+      "REGION": params.REGION,
+      "ZONE": params.ZONE,
+      "ENVIRONMENT": params.ENVIRONMENT,
+      "DB_INSTANCE_NAME": params.DB_INSTANCE_NAME,
+      "DB_AVAILABILITY_TYPE": params.DB_AVAILABILITY_TYPE,
+      "DB_VERSION": params.DB_VERSION,
+      "MACHINE_TYPE": params.MACHINE_TYPE,
+      "DB_MAX_CONNECTIONS": params.DB_MAX_CONNECTIONS,
+      "DB_STORAGE_SIZE": params.DB_STORAGE_SIZE,
+      "DB_STORAGE_AUTO_RESIZE": params.DB_STORAGE_AUTO_RESIZE,
+      "DB_STORAGE_TYPE": params.DB_STORAGE_TYPE,
+      "DB_USERNAME": params.DB_USERNAME,
+      "DB_PASSWORD": params.DB_PASSWORD,
+      "DB_VPC_NETWORK": params.DB_VPC_NETWORK,
+      "DB_PRIVATE_IP_ENABLED": params.DB_PRIVATE_IP_ENABLED,
+      "DB_PUBLIC_ACCESS_ENABLED": params.DB_PUBLIC_ACCESS_ENABLED,
+      "DB_IP_RANGE_ALLOWED": params.DB_IP_RANGE_ALLOWED,
+      "DB_BACKUP_START_TIME": params.DB_BACKUP_START_TIME,
+      "DB_BACKUP_RETENTION_DAYS": params.DB_BACKUP_RETENTION_DAYS,
+      "DB_MAINTENANCE_WINDOW_DAY": params.DB_MAINTENANCE_WINDOW_DAY,
+      "DB_MAINTENANCE_WINDOW_HOUR": params.DB_MAINTENANCE_WINDOW_HOUR,
+      "DB_MONITORING_ENABLED": params.DB_MONITORING_ENABLED,
+      "DB_AUDIT_LOGS_ENABLED": params.DB_AUDIT_LOGS_ENABLED,
+      "DB_DELETION_PROTECTION": params.DB_DELETION_PROTECTION,
+      "DB_ENCRYPTION_ENABLED": params.DB_ENCRYPTION_ENABLED,
+      "ENABLE_CACHE": params.ENABLE_CACHE,
+      "CHECK_DELETE": params.CHECK_DELETE,
+      "CREDENTIAL_FILE": params.CREDENTIAL_FILE,
+      "DB_IAM_ROLE": params.DB_IAM_ROLE,
+      "DB_FAILOVER_REPLICA_ENABLED": params.DB_FAILOVER_REPLICA_ENABLED,
+      "DB_READ_REPLICA_ENABLED": params.DB_READ_REPLICA_ENABLED
+    ]
+
+    def varString = vars.collect { k, v -> "-var=\"${k}=${v}\"" }.join(' ')
+    return varString
+  }
+
   stages {
-    stage('Imprimir variables por sección') {
+    
+    stage('Terraform Plan') {
+      when { expression { params.ACTION == 'plan' || params.ACTION == 'apply' } }
       steps {
         script {
-          // --- Sección: Ocultas (environment)
-          def ocultas = [
-            DB_BACKUP_ENABLED   : env.DB_BACKUP_ENABLED,
-            DB_ENGINE           : env.DB_ENGINE,
-            DB_PASSWORD_ADMIN   : env.DB_PASSWORD_ADMIN,
-            DB_PLATFORM_PASS    : env.DB_PLATFORM_PASS,
-            DB_PLATFORM_USER    : env.DB_PLATFORM_USER,
-            DB_RESOURCE_LABELS  : env.DB_RESOURCE_LABELS,
-            DB_SERVICE_PROVIDER : env.DB_SERVICE_PROVIDER,
-            DB_TAGS             : env.DB_TAGS,
-            DB_TIME_ZONE        : env.DB_TIME_ZONE,
-            DB_USER_ADMIN       : env.DB_USER_ADMIN,
-            PAIS                : env.PAIS
-          ]
+          withCredentials([file(credentialsId: 'gcp-sa-platform', variable: 'GCP_CREDENTIALS')]) {
+            sh "export GOOGLE_APPLICATION_CREDENTIALS='${GCP_CREDENTIALS}'"
 
-          // --- Sección: GCP
-          def gcp = [
-            ENVIRONMENT : params.ENVIRONMENT,
-            PROJECT_ID  : params.PROJECT_ID,
-            REGION      : params.REGION,
-            ZONE        : params.ZONE
-          ]
+            dir('terraform') { 
+              echo "Inicializando Terraform..."
+              sh 'terraform init'
 
-          // --- Sección: Type / Instancia
-          def typeInst = [
-            DB_AVAILABILITY_TYPE : params.DB_AVAILABILITY_TYPE,
-            DB_INSTANCE_ID       : params.DB_INSTANCE_ID,
-            DB_INSTANCE_NAME     : params.DB_INSTANCE_NAME,
-            DB_MAX_CONNECTIONS   : params.DB_MAX_CONNECTIONS,
-            DB_PASSWORD          : params.DB_PASSWORD,
-            DB_STORAGE_AUTO_RESIZE: params.DB_STORAGE_AUTO_RESIZE,
-            DB_STORAGE_SIZE      : params.DB_STORAGE_SIZE,
-            DB_STORAGE_TYPE      : params.DB_STORAGE_TYPE,
-            DB_USERNAME          : params.DB_USERNAME,
-            DB_VERSION           : params.DB_VERSION,
-            MACHINE_TYPE         : params.MACHINE_TYPE
-          ]
-
-          // --- Sección: Redes
-          def redes = [
-            DB_IP_RANGE_ALLOWED      : params.DB_IP_RANGE_ALLOWED,
-            DB_PRIVATE_IP_ENABLED    : params.DB_PRIVATE_IP_ENABLED,
-            DB_PUBLIC_ACCESS_ENABLED : params.DB_PUBLIC_ACCESS_ENABLED,
-            DB_SUBNET                : params.DB_SUBNET,
-            DB_VPC_NETWORK           : params.DB_VPC_NETWORK
-          ]
-
-          // --- Sección: Seguridad / Operación
-          def segOp = [
-            CHECK_DELETE               : params.CHECK_DELETE,
-            CREDENTIAL_FILE            : params.CREDENTIAL_FILE,
-            DB_AUDIT_LOGS_ENABLED      : params.DB_AUDIT_LOGS_ENABLED,
-            DB_BACKUP_RETENTION_DAYS   : params.DB_BACKUP_RETENTION_DAYS,
-            DB_BACKUP_START_TIME       : params.DB_BACKUP_START_TIME,
-            DB_DELETION_PROTECTION     : params.DB_DELETION_PROTECTION,
-            DB_ENCRYPTION_ENABLED      : params.DB_ENCRYPTION_ENABLED,
-            DB_IAM_ROLE                : params.DB_IAM_ROLE,
-            DB_MAINTENANCE_WINDOW_DAY  : params.DB_MAINTENANCE_WINDOW_DAY,
-            DB_MAINTENANCE_WINDOW_HOUR : params.DB_MAINTENANCE_WINDOW_HOUR,
-            DB_MONITORING_ENABLED      : params.DB_MONITORING_ENABLED,
-            ENABLE_CACHE               : params.ENABLE_CACHE
-          ]
-
-          // --- Sección: Replica / Failover
-          def replica = [
-            DB_FAILOVER_REPLICA_ENABLED: params.DB_FAILOVER_REPLICA_ENABLED,
-            DB_READ_REPLICA_ENABLED    : params.DB_READ_REPLICA_ENABLED
-          ]
-
-          // Helper CPS-safe para imprimir ordenado
-          def printSection = { String titulo, Map m ->
-            echo "================= ${titulo} ================="
-            def keys = m.keySet().toList(); keys.sort()
-            for (k in keys) {
-              def v = m[k]
-              echo "${k}: ${v == null ? '' : v}"
+              echo "Creando plan de ejecución con las variables de Jenkins..."
+              def tfVars = getTerraformVars()
+              
+              // Ejecutar Terraform Plan y guardarlo en un archivo para la etapa 'apply'
+              sh "terraform plan ${tfVars} -out=tfplan"
+              
+              // Archivar el plan para usarlo en la siguiente etapa
+              archiveArtifacts artifacts: 'tfplan', fingerprint: true
             }
           }
+        }
+      }
+    }
+    
+    ---
+    
+    stage('Terraform Apply') {
+      when { expression { params.ACTION == 'apply' } }
+      steps {
+        script {
+          withCredentials([file(credentialsId: 'gcp-sa-platform', variable: 'GCP_CREDENTIALS')]) {
+            sh "export GOOGLE_APPLICATION_CREDENTIALS='${GCP_CREDENTIALS}'"
 
-          printSection('DEFAULT (Ocultas)', ocultas)
-          printSection('GCP', gcp)
-          printSection('TYPE / INSTANCIA', typeInst)
-          printSection('REDES', redes)
-          printSection('SEGURIDAD / OPERACIÓN', segOp)
-          printSection('REPLICA / FAILOVER', replica)
+            dir('terraform') { 
+              echo "Descargando el plan guardado..."
+              // Descargar el tfplan generado en la etapa anterior
+              // Nota: Esto requiere que el pipeline se ejecute en el mismo workspace o use un almacenamiento de estado remoto.
+              // Asumimos que el artifact está disponible.
+              
+              // Descargar artefacto si se ejecuta en un nuevo executor
+              // steps { copyArtifacts(projectName: env.JOB_NAME, selector: lastSuccessful(), artifacts: 'terraform/tfplan') } 
+              
+              // Si se ejecuta en el mismo executor:
+              sh 'if [ -f tfplan ]; then echo "Usando tfplan local."; else echo "Error: tfplan no encontrado. Asegúrese de ejecutar 'plan' primero."; exit 1; fi'
+
+              echo "Aplicando cambios de infraestructura desde el plan..."
+              sh 'terraform apply -auto-approve tfplan' 
+              
+              echo "Guardando salidas de Terraform."
+              sh 'terraform output -json > output.json'
+            }
+          }
+        }
+      }
+    }
+    
+    ---
+    
+    stage('Terraform Destroy') {
+      when { expression { params.ACTION == 'destroy' } }
+      steps {
+        script {
+          // Se añade una verificación para evitar borrados accidentales
+          if (params.ENVIRONMENT == '3-Produccion' && params.CHECK_DELETE != 'true') {
+            error("Operación DESTROY en PRODUCCIÓN no permitida. Ajuste el parámetro CHECK_DELETE a 'true' para confirmar.")
+          }
+          
+          withCredentials([file(credentialsId: 'gcp-sa-platform', variable: 'GCP_CREDENTIALS')]) {
+            sh "export GOOGLE_APPLICATION_CREDENTIALS='${GCP_CREDENTIALS}'"
+
+            dir('terraform') { 
+              echo "Inicializando Terraform para destruir la infraestructura..."
+              sh 'terraform init'
+              
+              echo "Ejecutando DESTROY. Esto eliminará todos los recursos gestionados por este estado de Terraform."
+              // El comando destroy debe usar -auto-approve para ser no interactivo
+              def tfVars = getTerraformVars()
+              sh "terraform destroy ${tfVars} -auto-approve" 
+            }
+          }
         }
       }
     }
