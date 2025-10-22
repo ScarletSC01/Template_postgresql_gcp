@@ -22,6 +22,9 @@ resource "google_sql_database_instance" "master" {
   name                = var.DB_INSTANCE_NAME
   deletion_protection = var.DB_DELETION_PROTECTION == "true"
   
+  // CORRECCIÓN 1: 'zone' debe ser un argumento de nivel de recurso
+  zone                = var.DB_AVAILABILITY_TYPE == "single zone" && var.ZONE != "" ? var.ZONE : null 
+  
   settings {
     // Argumentos nivel settings {}
     tier                   = var.MACHINE_TYPE
@@ -31,22 +34,19 @@ resource "google_sql_database_instance" "master" {
     activation_policy      = "ALWAYS"
     availability_type      = var.DB_AVAILABILITY_TYPE == "regional" ? "REGIONAL" : "ZONAL"
     
-    // CORRECCIÓN: 'zone' debe ir dentro de settings {}
-    zone                   = var.DB_AVAILABILITY_TYPE == "single zone" && var.ZONE != "" ? var.ZONE : null 
-    
-    // CORRECCIÓN: 'data_cache_enabled' debe ir dentro de settings {}
-    data_cache_enabled     = var.ENABLE_CACHE == "true"
+    // CORRECCIÓN 2: Eliminamos data_cache_enabled, no soportado en db-f1-micro
+    # data_cache_enabled     = var.ENABLE_CACHE == "true"
 
     // Configuración de Backup
     backup_configuration {
       enabled              = true 
       start_time           = var.DB_BACKUP_START_TIME
       location             = var.REGION
+      // Usamos 'transaction_log_retention_days' en lugar de 'retained_backups' para la retención basada en tiempo.
+      transaction_log_retention_days = try(var.DB_BACKUP_RETENTION_DAYS, "7")
       point_in_time_recovery_enabled = true
-
-      // CORRECCIÓN: 'retained_backups' debe ir dentro de backup_configuration {}
-      // NOTA: Debe convertirse a número. Usamos ceil() para garantizar un entero.
-      retained_backups     = ceil(try(tonumber(var.DB_BACKUP_RETENTION_DAYS), 7))
+      
+      # retained_backups eliminado para evitar conflicto de versiones
     }
 
     // Mantenimiento
@@ -72,11 +72,10 @@ resource "google_sql_database_instance" "master" {
       }
     }
     
-    // CORRECCIÓN: Las configuraciones a nivel de PostgreSQL, como max_connections y pgaudit, 
-    // se manejan a través del bloque database_flags.
+    // Flags: max_connections y pgaudit
     database_flags {
       name  = "max_connections"
-      value = try(var.DB_MAX_CONNECTIONS, "100") // Debe ser un string
+      value = try(var.DB_MAX_CONNECTIONS, "100")
     }
     
     dynamic "database_flags" {
