@@ -1,4 +1,10 @@
-// Sección: GCP
+// CONTROL DE ACCIÓN (Usado solo para lógica interna, si fuera necesario, pero se define para recibir el input)
+variable "ACTION" {
+  type        = string
+  description = "Acción de Terraform a ejecutar: plan, apply, destroy"
+}
+
+// GCP
 variable "PROJECT_ID" {
   type        = string
   description = "ID del proyecto de GCP"
@@ -16,10 +22,14 @@ variable "ENVIRONMENT" {
   description = "Ambiente (e.g., 1-Desarrollo)"
 }
 
-// Sección: Type / Instancia
+// TYPE / INSTANCIA
 variable "DB_INSTANCE_NAME" {
   type        = string
   description = "Nombre de la instancia de Cloud SQL"
+}
+variable "DB_INSTANCE_ID" {
+  type        = string
+  description = "ID de instancia (No se usa directamente en el recurso)"
 }
 variable "DB_AVAILABILITY_TYPE" {
   type        = string
@@ -36,14 +46,16 @@ variable "MACHINE_TYPE" {
 variable "DB_MAX_CONNECTIONS" {
   type        = string
   description = "Máx conexiones"
+  default     = "100" // Default para manejo de conversión
 }
 variable "DB_STORAGE_SIZE" {
   type        = string
   description = "Almacenamiento (GB)"
+  default     = "10" // Default para manejo de conversión
 }
 variable "DB_STORAGE_AUTO_RESIZE" {
   type        = string
-  description = "Auto-resize (true/false)"
+  description = "Auto-resize (false/true)"
 }
 variable "DB_STORAGE_TYPE" {
   type        = string
@@ -58,25 +70,29 @@ variable "DB_PASSWORD" {
   description = "Password del usuario de la base de datos"
 }
 
-// Sección: Redes
+// REDES
 variable "DB_VPC_NETWORK" {
   type        = string
   description = "VPC a usar (formato projects/PROJECT_ID/global/networks/NETWORK_NAME)"
 }
-variable "DB_PRIVATE_IP_ENABLED" {
+variable "DB_SUBNET" {
   type        = string
-  description = "Habilitar IP privada (true/false)"
+  description = "Subred (No se usa directamente en Cloud SQL)"
 }
 variable "DB_PUBLIC_ACCESS_ENABLED" {
   type        = string
-  description = "Habilitar acceso público (true/false)"
+  description = "Habilitar acceso público (false/true)"
+}
+variable "DB_PRIVATE_IP_ENABLED" {
+  type        = string
+  description = "Habilitar IP privada (false/true)"
 }
 variable "DB_IP_RANGE_ALLOWED" {
   type        = string
   description = "Rangos permitidos (true/false para definir si se configuran o no)"
 }
 
-// Sección: Seguridad / Operación
+// SEGURIDAD / OPERACIÓN
 variable "DB_BACKUP_START_TIME" {
   type        = string
   description = "Hora inicio backup (HH:MM)"
@@ -84,14 +100,17 @@ variable "DB_BACKUP_START_TIME" {
 variable "DB_BACKUP_RETENTION_DAYS" {
   type        = string
   description = "Retención (días)"
+  default     = "7"
 }
 variable "DB_MAINTENANCE_WINDOW_DAY" {
   type        = string
   description = "Día mantención (1=Lun, 7=Dom)"
+  default     = "1"
 }
 variable "DB_MAINTENANCE_WINDOW_HOUR" {
   type        = string
   description = "Hora mantención (0-23)"
+  default     = "0"
 }
 variable "DB_MONITORING_ENABLED" {
   type        = string
@@ -107,31 +126,31 @@ variable "DB_DELETION_PROTECTION" {
 }
 variable "DB_ENCRYPTION_ENABLED" {
   type        = string
-  description = "Encripción (true/false)"
+  description = "Encripción (true/false) - Usado para configurar CMEK si es requerido."
 }
 variable "ENABLE_CACHE" {
   type        = string
-  description = "Habilitar caché (true/false)"
+  description = "Habilitar caché (false/true)"
 }
 variable "CHECK_DELETE" {
   type        = string
-  description = "Check delete (variable de control, sin mapeo directo en Cloud SQL)"
+  description = "Check delete (variable de control de Jenkins)"
 }
 variable "CREDENTIAL_FILE" {
   type        = string
-  description = "Ruta credenciales (JSON)"
+  description = "Ruta credenciales (JSON) - No usado directamente en Terraform."
 }
 variable "DB_IAM_ROLE" {
   type        = string
-  description = "IAM Role"
+  description = "IAM Role - Para autenticación de base de datos IAM."
 }
 
-// Sección: Replica / Failover
+// REPLICA / FAILOVER
 variable "DB_FAILOVER_REPLICA_ENABLED" {
   type        = string
-  description = "Failover replica (true/false)"
+  description = "Failover replica (false/true) - Se logra con availability_type: REGIONAL"
 }
 variable "DB_READ_REPLICA_ENABLED" {
   type        = string
-  description = "Read replica (true/false)"
+  description = "Read replica (false/true)"
 }
